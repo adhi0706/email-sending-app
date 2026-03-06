@@ -1,5 +1,4 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import adminRoutes from './routes/admin.js';
@@ -26,18 +25,12 @@ app.get('/api/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/email-system';
 
-mongoose.connect(MONGO_URI).then(() => {
-    console.log('Connected to MongoDB successfully!');
-    // If not running in a Vercel serverless environment, start listening
-    if (!process.env.VERCEL) {
-        app.listen(PORT, () => {
-            console.log(`Server running on port ${PORT}`);
-        });
-    }
-}).catch((error) => {
-    console.error("MongoDB connection error:", error);
-});
+// If not running in a Vercel/Netlify serverless environment, start listening
+if (!process.env.VERCEL && !process.env.NETLIFY) {
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT} (In-Memory / No DB mode)`);
+    });
+}
 
 export default app;

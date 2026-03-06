@@ -2,10 +2,11 @@ import express from 'express';
 import multer from 'multer';
 import csv from 'csv-parser';
 import stream from 'stream';
-import Client from '../models/Client.js';
 import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
+
+let memoryClients = [];
 
 // Memory store middleware for file uploads using Multer 
 const storage = multer.memoryStorage();
@@ -14,7 +15,7 @@ const upload = multer({ storage: storage });
 // Retrieve all clients
 router.get('/', requireAuth, async (req, res) => {
     try {
-        const clients = await Client.find().sort({ slno: 1 });
+        const clients = [...memoryClients].sort((a, b) => a.slno - b.slno);
         res.json(clients);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -24,7 +25,7 @@ router.get('/', requireAuth, async (req, res) => {
 // Delete all clients
 router.delete('/', requireAuth, async (req, res) => {
     try {
-        await Client.deleteMany({});
+        memoryClients = [];
         res.json({ message: 'All clients have been removed' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -60,20 +61,24 @@ router.post('/upload', requireAuth, upload.single('csvFile'), async (req, res) =
             try {
                 if (parseError) throw parseError;
 
-                // Optionally clear old data, but usually users append or clear explicitly
-                // await Client.deleteMany({}); 
+                // Append and assign an id like MongoDB did implicitly
+                const newClients = results.map((r, i) => ({
+                    ...r,
+                    _id: Date.now().toString() + i
+                }));
+                // Filter duplicates by email roughly
+                newClients.forEach(nc => {
+                    const exists = memoryClients.find(mc => mc.email === nc.email);
+                    if (!exists) {
+                        memoryClients.push(nc);
+                    }
+                });
 
-                // Bulk insert array cleanly
-                const docs = await Client.insertMany(results, { ordered: false });
                 res.status(200).json({
                     message: 'Upload successful',
-                    count: docs.length
+                    count: newClients.length
                 });
             } catch (err) {
-                // Return 200 indicating partial pass if duplicate emails exist, but log error array
-                if (err.code === 11000) {
-                    return res.status(200).json({ message: "Partial upload. Some duplicates ignored." });
-                }
                 res.status(500).json({ error: err.message });
             }
         });

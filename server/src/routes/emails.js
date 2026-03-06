@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 import multer from 'multer';
 import { requireAuth } from '../middleware/auth.js';
 import OpenAI from 'openai';
-import EmailDraft from '../models/EmailDraft.js';
-import Client from '../models/Client.js';
+
+let memoryDrafts = [];
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -36,7 +36,10 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Send emails to users securely with a delay constraint 
 router.post('/send', requireAuth, upload.array('attachments'), async (req, res) => {
-    let { clients, subject, body } = req.body;
+    let { clients, subject, body, delay: requestDelay } = req.body;
+
+    // Default to 2 seconds if not provided, else convert to integer
+    const delayMs = requestDelay ? parseInt(requestDelay, 10) * 1000 : 2000;
 
     // In multipart/form-data, clients is sent as a JSON string
     if (typeof clients === 'string') {
@@ -93,8 +96,8 @@ router.post('/send', requireAuth, upload.array('attachments'), async (req, res) 
         try {
             await transporter.sendMail(mailOptions);
             sentCount++;
-            // Wait for 2 seconds (2000 ms) as specified
-            await delay(2000);
+            // Wait for specified delay
+            await delay(delayMs);
         } catch (error) {
             failedCount++;
             failureLogs.push({ client: client.email, error: error.message });
@@ -112,8 +115,13 @@ router.post('/send', requireAuth, upload.array('attachments'), async (req, res) 
 // Drafts endpoints
 router.post('/drafts', requireAuth, async (req, res) => {
     try {
-        const draft = new EmailDraft({ subject: req.body.subject, body: req.body.body });
-        await draft.save();
+        const draft = {
+            _id: Date.now().toString(),
+            subject: req.body.subject,
+            body: req.body.body,
+            createdAt: new Date().toISOString()
+        };
+        memoryDrafts.unshift(draft);
         res.json(draft);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -122,8 +130,7 @@ router.post('/drafts', requireAuth, async (req, res) => {
 
 router.get('/drafts', requireAuth, async (req, res) => {
     try {
-        const drafts = await EmailDraft.find().sort({ createdAt: -1 });
-        res.json(drafts);
+        res.json(memoryDrafts);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -131,7 +138,7 @@ router.get('/drafts', requireAuth, async (req, res) => {
 
 router.delete('/drafts/:id', requireAuth, async (req, res) => {
     try {
-        await EmailDraft.findByIdAndDelete(req.params.id);
+        memoryDrafts = memoryDrafts.filter(d => d._id !== req.params.id);
         res.json({ message: 'Deleted draft' });
     } catch (err) {
         res.status(500).json({ error: err.message });

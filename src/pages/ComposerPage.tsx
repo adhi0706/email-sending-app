@@ -39,6 +39,7 @@ export default function ComposerPage() {
   const [rangeEnd, setRangeEnd] = useState('');
   const [slnoInput, setSlnoInput] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [delay, setDelay] = useState(15);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -186,6 +187,7 @@ export default function ComposerPage() {
       formData.append('subject', subject);
       formData.append('body', body);
       formData.append('clients', JSON.stringify(selectedClientData));
+      formData.append('delay', delay.toString());
 
       attachments.forEach(file => {
         formData.append('attachments', file);
@@ -372,6 +374,20 @@ export default function ComposerPage() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Send Delay</label>
+                <select
+                  value={delay}
+                  onChange={(e) => setDelay(Number(e.target.value))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value={2}>Fast (2 seconds) - High Spam Risk</option>
+                  <option value={15}>15 seconds - Medium Spam Risk</option>
+                  <option value={30}>30 seconds - Low Spam Risk</option>
+                  <option value={60}>1 minute - Safest</option>
+                </select>
               </div>
 
               <div className="flex gap-3">
